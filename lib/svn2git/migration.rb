@@ -4,24 +4,20 @@ require 'timeout'
 require 'thread'
 
 module Svn2Git
-  DEFAULT_AUTHORS_FILE = "~/.svn2git/authors"
+  DEFAULT_AUTHORS_FILE = '~/.svn2git/authors'
 
   class Migration
-
     attr_reader :dir
 
     def initialize(args)
       @options = parse(args)
-      if @options[:rebase]
-         show_help_message('Too many arguments') if args.size > 0
-         verify_working_tree_is_clean
-      elsif @options[:rebasebranch]
-         show_help_message('Too many arguments') if args.size > 0
-         verify_working_tree_is_clean
+      if @options[:rebase] || @options[:rebasebranch]
+        show_help_message('Too many arguments') if args.size > 0
+        verify_working_tree_is_clean
       else
-         show_help_message('Missing SVN_URL parameter') if args.empty?
-         show_help_message('Too many arguments') if args.size > 1
-         @url = args.first.gsub(' ', "\\ ")
+        show_help_message('Missing SVN_URL parameter') if args.empty?
+        show_help_message('Too many arguments') if args.size > 1
+        @url = args.first.gsub(' ', '\\ ')
       end
     end
 
@@ -54,10 +50,9 @@ module Svn2Git
       options[:username] = nil
       options[:rebasebranch] = false
 
-      if File.exists?(File.expand_path(DEFAULT_AUTHORS_FILE))
+      if File.exist?(File.expand_path(DEFAULT_AUTHORS_FILE))
         options[:authors] = DEFAULT_AUTHORS_FILE
       end
-
 
       # Parse the command-line arguments.
       @opts = OptionParser.new do |opts|
@@ -159,7 +154,7 @@ module Svn2Git
       "git checkout -b \"#{branch}\" \"remotes/svn/#{branch}\""
     end
 
-  private
+    private
 
     def clone!
       trunk = @options[:trunk]
@@ -173,41 +168,29 @@ module Svn2Git
       revision = @options[:revision]
       username = @options[:username]
 
+      # Add each component to the command as needed
+      cmd = 'git svn init --prefix=svn/ '
+      cmd += "--username=#{username} " unless username.nil?
+      cmd += '--no-metadata ' unless metadata
+      cmd += '--no-minimize-url ' if nominimizeurl
+
+      # Non-standard repository layout. The repository root is effectively 'trunk'.
       if rootistrunk
-        # Non-standard repository layout.  The repository root is effectively 'trunk.'
-        cmd = "git svn init --prefix=svn/ "
-        cmd += "--username=#{username} " unless username.nil?
-        cmd += "--no-metadata " unless metadata
-        if nominimizeurl
-          cmd += "--no-minimize-url "
-        end
         cmd += "--trunk=#{@url}"
-        run_command(cmd, true, true)
-
       else
-        cmd = "git svn init --prefix=svn/ "
-
-        # Add each component to the command that was passed as an argument.
-        cmd += "--username=#{username} " unless username.nil?
-        cmd += "--no-metadata " unless metadata
-        if nominimizeurl
-          cmd += "--no-minimize-url "
-        end
         cmd += "--trunk=#{trunk} " unless trunk.nil?
         cmd += "--tags=#{tags} " unless tags.nil?
         cmd += "--branches=#{branches} " unless branches.nil?
-
         cmd += @url
-
-        run_command(cmd, true, true)
       end
+      run_command(cmd, true, true)
 
       run_command("#{git_config_command} svn.authorsfile #{authors}") unless authors.nil?
 
-      cmd = "git svn fetch "
+      cmd = 'git svn fetch '
       unless revision.nil?
-        range = revision.split(":")
-        range[1] = "HEAD" unless range[1]
+        range = revision.split(':')
+        range[1] = 'HEAD' unless range[1]
         cmd += "-r #{range[0]}:#{range[1]} "
       end
       unless exclude.empty?
@@ -228,26 +211,26 @@ module Svn2Git
     end
 
     def get_branches
-      # Get the list of local and remote branches, taking care to ignore console color codes and ignoring the
-      # '*' character used to indicate the currently selected branch.
-      @local = run_command("git branch -l --no-color").split(/\n/).collect{ |b| b.gsub(/\*/,'').strip }
-      @remote = run_command("git branch -r --no-color").split(/\n/).collect{ |b| b.gsub(/\*/,'').strip }
+      # Get the list of local and remote branches, taking care to ignore console
+      # color codes and ignoring the '*' character used to indicate the
+      # currently selected branch.
+      @local = run_command('git branch -l --no-color').split(/\n/).map { |b| b.gsub(/\*/, '').strip }
+      @remote = run_command('git branch -r --no-color').split(/\n/).map { |b| b.gsub(/\*/, '').strip }
 
       # Tags are remote branches that start with "tags/".
-      @tags = @remote.find_all { |b| b.strip =~ %r{^svn\/tags\/} }
-
+      @tags = @remote.select { |b| b.strip =~ %r{^svn\/tags\/} }
     end
 
     def get_rebasebranch
-	  get_branches 
-	  @local = @local.find_all{|l| l == @options[:rebasebranch]}
-	  @remote = @remote.find_all{|r| r.include? @options[:rebasebranch]}
+      get_branches
+      @local = @local.find_all{|l| l == @options[:rebasebranch]}
+      @remote = @remote.find_all{|r| r.include? @options[:rebasebranch]}
 
-      if @local.count > 1 
+      if @local.count > 1
         pp "To many matching branches found (#{@local})."
         exit 1
       elsif @local.count == 0
-	    pp "No local branch named \"#{@options[:rebasebranch]}\" found."
+        pp "No local branch named \"#{@options[:rebasebranch]}\" found."
         exit 1
       end
 
@@ -255,14 +238,13 @@ module Svn2Git
         pp "To many matching remotes found (#{@remotes})"
         exit 1
       elsif @remote.count == 0
-	    pp "No remote branch named \"#{@options[:rebasebranch]}\" found."
+        pp "No remote branch named \"#{@options[:rebasebranch]}\" found."
         exit 1
       end
-	  pp "Local branches \"#{@local}\" found"
-	  pp "Remote branches \"#{@remote}\" found"
+      pp "Local branches \"#{@local}\" found"
+      pp "Remote branches \"#{@remote}\" found"
 
       @tags = [] # We only rebase the specified branch
-
     end
 
     def fix_tags
@@ -284,12 +266,12 @@ module Svn2Git
         ENV['GIT_COMMITTER_DATE'] = escape_quotes(date)
         run_command("git tag -a -m \"#{escape_quotes(subject)}\" \"#{escape_quotes(id)}\" \"#{escape_quotes(tag)}\"")
         ENV['GIT_COMMITTER_DATE'] = original_git_committer_date
-
         run_command("git branch -d -r \"#{escape_quotes(tag)}\"")
       end
 
     ensure
-      # We only change the git config values if there are @tags available.  So it stands to reason we should revert them only in that case.
+      # We only change the git config values if there are @tags available.So it
+      # stands to reason we should revert them only in that case.
       unless @tags.empty?
         current.each_pair do |name, value|
           # If a line was read, then there was a config value so restore it.
@@ -305,20 +287,18 @@ module Svn2Git
 
     def fix_branches
       svn_branches = @remote - @tags
-      svn_branches.delete_if { |b| b.strip !~ %r{^svn\/} }
+      svn_branches.delete_if { |b| b.strip !~ /^svn\// }
 
-      if @options[:rebase]
-         run_command("git svn fetch", true, true)
-      end
+      run_command('git svn fetch', true, true) if @options[:rebase]
 
       svn_branches.each do |branch|
-        branch = branch.gsub(/^svn\//,'').strip
+        branch = branch.gsub(/^svn\//, '').strip
         if @options[:rebase] && (@local.include?(branch) || branch == 'trunk')
-           lbranch = branch
-           lbranch = 'master' if branch == 'trunk'
-           run_command("git checkout -f \"#{lbranch}\"")
-           run_command("git rebase \"remotes/svn/#{branch}\"")
-           next
+          lbranch = branch
+          lbranch = 'master' if branch == 'trunk'
+          run_command("git checkout -f \"#{lbranch}\"")
+          run_command("git rebase \"remotes/svn/#{branch}\"")
+          next
         end
 
         next if branch == 'trunk' || @local.include?(branch)
@@ -328,12 +308,13 @@ module Svn2Git
         else
           status = run_command("git branch --track \"#{branch}\" \"remotes/svn/#{branch}\"", false)
 
-          # As of git 1.8.3.2, tracking information cannot be set up for remote SVN branches:
-          # http://git.661346.n2.nabble.com/git-svn-Use-prefix-by-default-td7594288.html#a7597159
+          # As of git 1.8.3.2, tracking information cannot be set up for remote
+          # SVN branches.
           #
-          # Older versions of git can do it and it should be safe as long as remotes aren't pushed.
-          # Our --rebase option obviates the need for read-only tracked remotes, however.  So, we'll
-          # deprecate the old option, informing those relying on the old behavior that they should
+          # Older versions of git can do it and it should be safe as long as
+          # remotes aren't pushed. Our --rebase option obviates the need for
+          # read-only tracked remotes, however.  So, we'll deprecate the old
+          # option, informing those relying on the old behavior that they should
           # use the newer --rebase otion.
           if status =~ /Cannot setup tracking information/m
             @cannot_setup_tracking_information = true
@@ -341,9 +322,9 @@ module Svn2Git
           else
             unless @legacy_svn_branch_tracking_message_displayed
               warn '*' * 68
-              warn "svn2git warning: Tracking remote SVN branches is deprecated."
-              warn "In a future release local branches will be created without tracking."
-              warn "If you must resync your branches, run: svn2git --rebase"
+              warn 'svn2git warning: Tracking remote SVN branches is deprecated.'
+              warn 'In a future release local branches will be created without tracking.'
+              warn 'If you must resync your branches, run: svn2git --rebase'
               warn '*' * 68
             end
 
@@ -358,42 +339,44 @@ module Svn2Git
     def fix_trunk
       trunk = @remote.find { |b| b.strip == 'trunk' }
       if trunk && ! @options[:rebase]
-        run_command("git checkout svn/trunk")
-        run_command("git branch -D master")
-        run_command("git checkout -f -b master")
+        run_command('git checkout svn/trunk')
+        run_command('git branch -D master')
+        run_command('git checkout -f -b master')
       else
-        run_command("git checkout -f master")
+        run_command('git checkout -f master')
       end
     end
 
     def optimize_repos
-      run_command("git gc")
+      run_command('git gc')
     end
 
-    def run_command(cmd, exit_on_error=true, printout_output=false)
+    def run_command(cmd, exit_on_error = true, printout_output = false)
       log "Running command: #{cmd}\n"
 
       ret = ''
       @stdin_queue ||= Queue.new
 
-      # We need to fetch input from the user to pass through to the underlying sub-process.  We'll constantly listen
-      # for input and place any received values on a queue for consumption by a pass-through thread that will forward
-      # the contents to the underlying sub-process's stdin pipe.
+      # We need to fetch input from the user to pass through to the underlying
+      # sub-process.  We'll constantly listen for input and place any received
+      # values on a queue for consumption by a pass-through thread that will
+      # forward the contents to the underlying sub-process's stdin pipe.
       @stdin_thread ||= Thread.new do
         loop { @stdin_queue << $stdin.gets.chomp }
       end
 
-      # Open4 forks, which JRuby doesn't support.  But JRuby added a popen4-compatible method on the IO class,
-      # so we can use that instead.
-      IO.popen("2>&1 #{cmd}") do |output|
+      # Open4 forks, which JRuby doesn't support.  But JRuby added a
+      # popen4-compatible method on the IO class, so we can use that instead.
+      IO.popen("2>&1 #{cmd}") do |popen_out|
         threads = []
 
-        threads << Thread.new(output) do |output|
-          # git-svn seems to do all of its prompting for user input via STDERR.  When it prompts for input, it will
-          # not terminate the line with a newline character, so we can't split the input up by newline.  It will,
-          # however, use a space to separate the user input from the prompt.  So we split on word boundaries here
-          # while draining STDERR.
-          output.each(' ') do |word|
+        threads << Thread.new(popen_out) do |thread_out|
+          # git-svn seems to do all of its prompting for user input via STDERR.
+          # When it prompts for input, it will not terminate the line with a
+          # newline character, so we can't split the input up by newline.
+          # It will, however, use a space to separate the user input from the
+          # prompt. So we split on word boundaries here while draining STDERR.
+          thread_out.each(' ') do |word|
             ret << word
 
             if printout_output
@@ -404,8 +387,8 @@ module Svn2Git
           end
         end
 
-        # Simple pass-through thread to take anything the user types via STDIN and passes it through to the
-        # sub-process's stdin pipe.
+        # Simple pass-through thread to take anything the user types via STDIN
+        # and passes it through to the sub-process's stdin pipe.
         Thread.new do
           loop do
             user_reply = @stdin_queue.pop
@@ -420,13 +403,14 @@ module Svn2Git
 
         threads.each(&:join)
 
-        # Push nil to the stdin_queue to gracefully exit the STDIN pass-through thread.
+        # Push nil to the stdin_queue to gracefully exit the STDIN pass-through
+        # thread.
         @stdin_queue << nil
       end
 
       if exit_on_error && $?.exitstatus != 0
         $stderr.puts "command failed:\n#{cmd}"
-        exit -1
+        exit 255
       end
 
       ret
@@ -445,8 +429,8 @@ module Svn2Git
     def verify_working_tree_is_clean
       status = run_command('git status --porcelain --untracked-files=no')
       unless status.strip == ''
-        puts 'You have local pending changes.  The working tree must be clean in order to continue.'
-        exit -1
+        puts 'You have local pending changes. The working tree must be clean in order to continue.'
+        exit 255
       end
     end
 
@@ -463,7 +447,5 @@ module Svn2Git
 
       @git_config_command
     end
-
   end
 end
-
